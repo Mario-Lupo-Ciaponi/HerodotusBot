@@ -43,6 +43,46 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 bot.remove_command("help")
 
+
+# <-------------- Start of helper functions -------------->
+
+def build_historical_figure_embed(data, wiki_data):
+    description = wiki_data["extract"][:4096]
+
+    name = data["name"]
+    title = data["title"]
+
+    information = data["info"]
+
+    born = information.get("born", "Unknown")
+    died = information.get("died", "Unknown")
+    house = information.get("house", "Unknown")
+    reign = information.get("reign", "Unknown")
+    dynasty = information.get("dynasty", "Unknown")
+    religion = information.get("religion", "Unknown")
+    successor = information.get("successor", "Unknown")
+    coronation = information.get("coronation", "Unknown")
+
+    embed = discord.Embed(
+        title=name,
+        description=description,
+        color=discord.Color.blue()
+    )
+
+    embed.add_field(name="Title:", value=title, inline=False)
+    embed.add_field(name="Born:", value=born, inline=False)
+    embed.add_field(name="Died:", value=died, inline=False)
+    embed.add_field(name="House:", value=house, inline=False)
+    embed.add_field(name="Reign:", value=reign, inline=False)
+    embed.add_field(name="Dynasty:", value=dynasty, inline=False)
+    embed.add_field(name="Religion:", value=religion, inline=False)
+    embed.add_field(name="Successor:", value=successor, inline=False)
+    embed.add_field(name="Coronation:", value=coronation, inline=False)
+
+    return embed
+
+# <-------------- End of helper functions -------------->
+
 # <-------------- Start of events -------------->
 
 @bot.event
@@ -162,52 +202,23 @@ async def figure(ctx, *args):
     url = HISTORICAL_FIGURE_URL + historical_figure
     wiki_url = WIKI_URL + historical_figure
 
-    response = requests.get(url, headers={'X-Api-Key': history_token})
     wiki_response = requests.get(WIKI_URL + historical_figure)
 
 
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers={'X-Api-Key': history_token}) as response:
             async with session.get(wiki_url) as wiki_response:
-                data = await response.json()
+                datas = await response.json()
 
-                if data:
-                    data = data[0]
-                    wiki_data = await wiki_response.json()
+                if datas:
+                    await ctx.send(f"Historical figures that match '{historical_figure}'")
 
-                    description = wiki_data["extract"]
+                    for data in datas:
+                        wiki_data = await wiki_response.json()
 
-                    name = data["name"]
-                    title = data["title"]
+                        embed = build_historical_figure_embed(data, wiki_data)
 
-                    info = data["info"]
-
-                    born = info.get("born", "Unknown")
-                    died = info.get("died", "Unknown")
-                    house = info.get("house", "Unknown")
-                    reign = info.get("reign", "Unknown")
-                    dynasty = info.get("dynasty", "Unknown")
-                    religion = info.get("religion", "Unknown")
-                    successor = info.get("successor", "Unknown")
-                    coronation = info.get("coronation", "Unknown")
-
-                    embed = discord.Embed(
-                        title=name,
-                        description=description,
-                        color=discord.Color.blue()
-                    )
-
-                    embed.add_field(name="Title:", value=title, inline=False)
-                    embed.add_field(name="Born:", value=born, inline=False)
-                    embed.add_field(name="Died:", value=died, inline=False)
-                    embed.add_field(name="House:", value=house, inline=False)
-                    embed.add_field(name="Reign:", value=reign, inline=False)
-                    embed.add_field(name="Dynasty:", value=dynasty, inline=False)
-                    embed.add_field(name="Religion:", value=religion, inline=False)
-                    embed.add_field(name="Successor:", value=successor, inline=False)
-                    embed.add_field(name="Coronation:", value=coronation, inline=False)
-
-                    await ctx.send(embed=embed)
+                        await ctx.send(embed=embed)
                 else:
                     await ctx.send(f"I must apologize, {ctx.author.mention}, for the chronicles hold no "
                                    f"record of the historical figure you seek.")
@@ -260,19 +271,18 @@ async def event(ctx, *args):
 
 @bot.command()
 async def quote(ctx):
-    response = requests.get(QUOTE_URL)
+    async with aiohttp.ClientSession() as session:
+        async with session.get(QUOTE_URL) as response:
+            if response.status != 200:
+                await ctx.send("Sorry, but I have a problem right now.. I am to old for this...")
+                return
 
-    if response.status_code != 200:
-        await ctx.send("Sorry, but I have a problem right now.. I am to old for this...")
-        return
+            quotes = await response.json()
 
-    quotes = response.json()
+        selected_quote = random.choice(quotes)
 
-    selected_quote = random.choice(quotes)
-
-    p_response = requests.get(PHILOSOPHER_URL + selected_quote["philosopher"]["id"])
-
-    philosopher = p_response.json()
+        async with session.get(PHILOSOPHER_URL + selected_quote["philosopher"]["id"]) as p_response:
+            philosopher = await p_response.json()
 
     philosopher_name = philosopher["name"]
     description = selected_quote["quote"]
