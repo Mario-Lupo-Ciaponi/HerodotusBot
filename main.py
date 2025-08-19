@@ -1,3 +1,6 @@
+import random
+
+import aiohttp
 import discord
 from discord.ext import commands
 import logging
@@ -9,13 +12,17 @@ import requests
 
 
 WIKI_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/"
-
+EVENT_URL = "https://api.api-ninjas.com/v1/historicalevents?text="
+QUOTE_URL = "https://philosophersapi.com/api/quotes"
+PHILOSOPHER_URL = "https://philosophersapi.com/api/philosophers/"
 
 profanity.load_censor_words()
 
 load_dotenv()
 
-token = os.getenv("DISCORD_TOKEN")
+bot_token = os.getenv("DISCORD_TOKEN")
+history_token = os.getenv("HISTORY_TOKEN")
+
 
 handler = logging.FileHandler(
     filename="discord.log",
@@ -101,7 +108,8 @@ async def figure(ctx, *args):
 
         embed = discord.Embed(
             title=title,
-            description=description
+            description=description,
+            color=discord.Color.blue()
         )
 
         await ctx.send(embed=embed)
@@ -110,5 +118,74 @@ async def figure(ctx, *args):
                        f"figure you were looking for.")
 
 
+@bot.command()
+async def event(ctx, *args):
+    event_name = " ".join(args)
+    url = EVENT_URL + event_name
 
-bot.run(token=token, log_handler=handler, log_level=logging.DEBUG)
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers={'X-Api-Key': history_token}) as response:
+            if response.status != 200:
+                await ctx.send(f"I apologies, {ctx.author.mention}, but I cannot seem to find the event '{event_name}'")
+                return
+
+            events = await response.json()
+
+    if not events:
+        await ctx.send(f"No events found for '{event_name}'")
+        return
+
+    embed = discord.Embed(
+        title=f"Events matching: {event_name}",
+        color=discord.Color.blue()
+    )
+
+    for h_event in events[:5]:
+        day = h_event.get("day", "?")
+        month = h_event.get("month", "?")
+        year = h_event.get("year", "?")
+
+        try:
+            year_int = int(year)
+            if year_int >= 0:
+                year_display = str(year_int)
+            else:
+                year_display = f"{abs(year_int)} BC"
+        except (ValueError, TypeError):
+            year_display = str(year)
+
+        date = f"{day}/{month}/{year_display}"
+        description = h_event.get("event", "No description available")
+        embed.add_field(name=date, value=description, inline=False)
+
+    await ctx.send(embed=embed)
+
+
+@bot.command()
+async def quote(ctx):
+    response = requests.get(QUOTE_URL)
+
+    if response.status_code != 200:
+        await ctx.send("Sorry, but I have a problem right now.. I am to old for this...")
+        return
+
+    quotes = response.json()
+
+    selected_quote = random.choice(quotes)
+
+    p_response = requests.get(phylosopher_url + selected_quote["philosopher"]["id"])
+
+    philosopher = p_response.json()
+
+    philosopher_name = philosopher["name"]
+    description = selected_quote["quote"]
+
+    embed = discord.Embed(
+        title=f"Quote by {philosopher_name}",
+        description=description,
+        color=discord.Color.blue()
+    )
+
+    await ctx.send(embed=embed)
+
+bot.run(token=bot_token, log_handler=handler, log_level=logging.DEBUG)
