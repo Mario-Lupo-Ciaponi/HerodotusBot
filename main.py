@@ -10,11 +10,15 @@ from better_profanity import profanity
 from discord.message import Message
 import requests
 
+import difflib
+
 
 WIKI_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/"
+HISTORICAL_FIGURE_URL = "https://api.api-ninjas.com/v1/historicalfigures?name="
 EVENT_URL = "https://api.api-ninjas.com/v1/historicalevents?text="
 QUOTE_URL = "https://philosophersapi.com/api/quotes"
 PHILOSOPHER_URL = "https://philosophersapi.com/api/philosophers/"
+
 
 profanity.load_censor_words()
 
@@ -37,6 +41,7 @@ intents.members = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+bot.remove_command("help")
 
 # <-------------- Start of events -------------->
 
@@ -48,7 +53,8 @@ async def on_ready():
 @bot.event
 async def member_join(member):
     try:
-        await member.send("Welcome, my student! Together we shall learn!")
+        await member.send("Welcome, eager student! Together we shall journey through the annals of time, "
+                          "and from the deeds of mortals past, wisdom shall be gained.")
     except discord.Forbidden:
         print(f"Could not DM {member.name}, they might have DMs disabled.")
 
@@ -60,7 +66,8 @@ async def on_message(message: Message):
 
     if profanity.contains_profanity(message.content):
         await message.delete()
-        await message.channel.send(f"These words are not allowed in my class!")
+        await message.channel.send(f"Such words are unworthy of our discourse, my pupil! "
+                                   f"In this hall of learning, we speak with dignity.")
 
     await bot.process_commands(message)
 
@@ -69,16 +76,70 @@ async def on_message(message: Message):
 async def on_message_edit(before: Message, after: Message):
     if profanity.contains_profanity(after.content):
         await after.delete()
-        await after.channel.send(f"{after.author} tried to edit his message, but it contains profanity!"
-                                 f"Before the edit -> {before.content}")
+        await after.channel.send(f"Lo! {after.author} sought to alter their words, yet their speech "
+                                 f"was found impure! Before their edit, they declared: {before.content}")
+
+
+@bot.event
+async def on_command_error(ctx, error):
+    if isinstance(error, commands.CommandNotFound):
+        all_commands = [cmd.name for cmd in bot.commands]
+        closest = difflib.get_close_matches(ctx.message.content[1:], all_commands, n=1)
+        suggestion = f" Did you mean `{closest[0]}`?" if closest else ""
+
+        await ctx.send(f"Alas, {ctx.author.mention}, the command you seek is "
+                       f"not recorded among my chronicles! {suggestion}")
+    else:
+        raise error
 
 # <-------------- End of events -------------->
 
 # <-------------- Start of commands -------------->
 
 @bot.command()
+async def help(ctx):
+    embed = discord.Embed(
+        title="📜 HerodotusBot: Scroll of Commands",
+        description="Behold, student of history! Here are the chronicles you may summon:",
+        color=discord.Color.blue()
+    )
+
+    embed.add_field(
+        name="!wave",
+        value="Receive my salute across the ages!",
+        inline=False
+    )
+
+    embed.add_field(
+        name="!info",
+        value="Learn the tale of me, your faithful chronicler.",
+        inline=False
+    )
+
+    embed.add_field(
+        name="!figure {name}",
+        value="Uncover the deeds and legacy of a historical figure.",
+        inline=False
+    )
+
+    embed.add_field(
+        name="!event {name}",
+        value="Explore a notable event from the annals of time.",
+        inline=False
+    )
+
+    embed.add_field(
+        name="!quote",
+        value="Hear a fragment of wisdom plucked from history's pages.",
+        inline=False
+    )
+
+    await ctx.send(embed=embed)
+
+@bot.command()
 async def wave(ctx):
-    await ctx.send("Well, hello there, dear student! Welcome to the class of history and knowledge!")
+    await ctx.send("Well met, dear student! You now enter the grand hall of history and knowledge, "
+                   "where the deeds of ages past shall be your teachers.")
 
 
 @bot.command()
@@ -96,26 +157,60 @@ async def info(ctx):
 
 @bot.command()
 async def figure(ctx, *args):
-    historical_figure = "_".join(args)
+    historical_figure = " ".join(el.capitalize() for el in args)
 
-    response = requests.get(WIKI_URL + historical_figure)
+    url = HISTORICAL_FIGURE_URL + historical_figure
+    wiki_url = WIKI_URL + historical_figure
 
-    if response.status_code == 200:
-        data = response.json()
+    response = requests.get(url, headers={'X-Api-Key': history_token})
+    wiki_response = requests.get(WIKI_URL + historical_figure)
 
-        title = data["title"]
-        description = data["extract"]
 
-        embed = discord.Embed(
-            title=title,
-            description=description,
-            color=discord.Color.blue()
-        )
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, headers={'X-Api-Key': history_token}) as response:
+            async with session.get(wiki_url) as wiki_response:
+                data = await response.json()
 
-        await ctx.send(embed=embed)
-    else:
-        await ctx.send(f"I apologies, {ctx.author.mention}, but I cannot seem to find the historical "
-                       f"figure you were looking for.")
+                if data:
+                    data = data[0]
+                    wiki_data = await wiki_response.json()
+
+                    description = wiki_data["extract"]
+
+                    name = data["name"]
+                    title = data["title"]
+
+                    info = data["info"]
+
+                    born = info.get("born", "Unknown")
+                    died = info.get("died", "Unknown")
+                    house = info.get("house", "Unknown")
+                    reign = info.get("reign", "Unknown")
+                    dynasty = info.get("dynasty", "Unknown")
+                    religion = info.get("religion", "Unknown")
+                    successor = info.get("successor", "Unknown")
+                    coronation = info.get("coronation", "Unknown")
+
+                    embed = discord.Embed(
+                        title=name,
+                        description=description,
+                        color=discord.Color.blue()
+                    )
+
+                    embed.add_field(name="Title:", value=title, inline=False)
+                    embed.add_field(name="Born:", value=born, inline=False)
+                    embed.add_field(name="Died:", value=died, inline=False)
+                    embed.add_field(name="House:", value=house, inline=False)
+                    embed.add_field(name="Reign:", value=reign, inline=False)
+                    embed.add_field(name="Dynasty:", value=dynasty, inline=False)
+                    embed.add_field(name="Religion:", value=religion, inline=False)
+                    embed.add_field(name="Successor:", value=successor, inline=False)
+                    embed.add_field(name="Coronation:", value=coronation, inline=False)
+
+                    await ctx.send(embed=embed)
+                else:
+                    await ctx.send(f"I must apologize, {ctx.author.mention}, for the chronicles hold no "
+                                   f"record of the historical figure you seek.")
 
 
 @bot.command()
@@ -126,13 +221,15 @@ async def event(ctx, *args):
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers={'X-Api-Key': history_token}) as response:
             if response.status != 200:
-                await ctx.send(f"I apologies, {ctx.author.mention}, but I cannot seem to find the event '{event_name}'")
+                await ctx.send(f"I must apologize, {ctx.author.mention}, for the annals reveal no record of "
+                               f"the event known as '{event_name}'.")
                 return
 
             events = await response.json()
 
     if not events:
-        await ctx.send(f"No events found for '{event_name}'")
+        await ctx.send(f"I must apologize, {ctx.author.mention}, for the annals reveal no record of "
+                       f"the event known as '{event_name}'.")
         return
 
     embed = discord.Embed(
@@ -173,7 +270,7 @@ async def quote(ctx):
 
     selected_quote = random.choice(quotes)
 
-    p_response = requests.get(phylosopher_url + selected_quote["philosopher"]["id"])
+    p_response = requests.get(PHILOSOPHER_URL + selected_quote["philosopher"]["id"])
 
     philosopher = p_response.json()
 
