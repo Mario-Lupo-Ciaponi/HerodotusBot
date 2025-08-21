@@ -135,7 +135,8 @@ class Commands(commands.Cog):
             return
 
         embed = discord.Embed(
-            title=f"Events matching: {event_name}", color=discord.Color.blue()
+            title=f"Behold, {ctx.author.mention}, the chronicles speak of events matching: '{event_name}'.",
+            color=discord.Color.blue()
         )
 
         embed = build_event_embed(events, embed)
@@ -156,12 +157,42 @@ class Commands(commands.Cog):
 
                 if not events:
                     await ctx.send(
-                        f"I must apologize, {ctx.author.mention}, today no event happened."
+                        f"I must apologize, {ctx.author.mention}, for the chronicles record no event upon this day."
                     )
                     return
 
                 embed = discord.Embed(
                     title="Events today:"
+                )
+
+                embed = build_event_embed(events, embed)
+
+                await ctx.send(embed=embed)
+
+    @commands.command()
+    async def era(self, ctx, year):
+        try:
+            year = int(year)
+        except ValueError:
+            await ctx.send(f"Alas, {ctx.author.mention}, the year you speak is not a number known to the annals!")
+            return
+
+        url = f"{EVENT_URL}year={year}"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers={"X-Api-Key": history_token}) as  response:
+                events = await response.json()
+
+                if not events:
+                    await ctx.send(
+                        f"I must apologize, {ctx.author.mention}, for the annals hold no record "
+                        f"of the events that transpired in the year {year}."
+                    )
+                    return
+
+                embed = discord.Embed(
+                    title=f"Behold the chronicles of {year}, when deeds both grand and humble shaped the "
+                          f"course of history."
                 )
 
                 embed = build_event_embed(events, embed)
