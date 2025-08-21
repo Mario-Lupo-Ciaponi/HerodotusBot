@@ -4,9 +4,11 @@ import discord
 from discord.ext import commands
 import random
 from utils.cache import JSONCache
-from utils.helper_functions import build_historical_figure_embed
+from utils.helper_functions import build_historical_figure_embed, build_event_embed
 import aiohttp
 import os
+
+from datetime import date
 
 
 WIKI_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/"
@@ -136,30 +138,35 @@ class Commands(commands.Cog):
             title=f"Events matching: {event_name}", color=discord.Color.blue()
         )
 
-        for h_event in events[:5]:
-            day = h_event.get("day", "?")
-            month = h_event.get("month", "?")
-            year = h_event.get("year", "?")
-
-            try:
-                year_int = int(year)
-                if year_int >= 0:
-                    year_display = str(year_int)
-                else:
-                    year_display = f"{abs(year_int)} BC"
-            except (ValueError, TypeError):
-                year_display = str(year)
-
-            date = f"{day}/{month}/{year_display}"
-            description = h_event.get("event", "No description available")
-            embed.add_field(name=date, value=description, inline=False)
+        embed = build_event_embed(events, embed)
 
         await ctx.send(embed=embed)
 
-    # @commands.command()
-    # async def today_in_history(self, ctx):
-    #     today_date =
+    @commands.command()
+    async def today_in_history(self, ctx):
+        today_date = date.today()
 
+        year, month, day = today_date.year, today_date.month, today_date.day
+
+        url = f"{EVENT_URL}year={year}&month={month}&day={day}"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers={"X-Api-Key": history_token}) as response:
+                events = await response.json()
+
+                if not events:
+                    await ctx.send(
+                        f"I must apologize, {ctx.author.mention}, today no event happened."
+                    )
+                    return
+
+                embed = discord.Embed(
+                    title="Events today:"
+                )
+
+                embed = build_event_embed(events, embed)
+
+                await ctx.send(embed=embed)
 
     @commands.command()
     async def quote(self, ctx):
