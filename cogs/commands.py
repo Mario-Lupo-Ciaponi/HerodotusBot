@@ -1,5 +1,3 @@
-import time
-
 import discord
 from discord.ext import commands
 import random
@@ -8,7 +6,7 @@ from utils.helper_functions import build_historical_figure_embed, build_event_em
 import aiohttp
 import os
 
-from datetime import date
+from datetime import date, datetime
 
 
 WIKI_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/"
@@ -196,6 +194,42 @@ class Commands(commands.Cog):
                 )
 
                 embed = build_event_embed(events, embed)
+
+                await ctx.send(embed=embed)
+
+    @commands.command()
+    async def birthdays(self, ctx, month, day):
+        month = datetime.strptime(month, "%B").month
+
+        try:
+            month, day = int(month), int(day)
+        except ValueError:
+            await ctx.send(f"Alas, {ctx.author.mention}, the month or day you speak is not a "
+                           f"number known to the annals!")
+            return
+
+        url = f"https://history.muffinlabs.com/date/{month}/{day}"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    await ctx.send(f"Alas, {ctx.author.mention}, I could not find anyone that was born this date.")
+                    return
+
+                data = await response.json()
+
+                birthdays = data["data"]["Births"][:25]
+
+                embed = discord.Embed(
+                    title=f"People born in {data["date"]}",
+                    color=discord.Color.blue(),
+                )
+
+                for birthday in birthdays:
+                    year = birthday["year"]
+                    person = birthday["text"]
+
+                    embed.add_field(name=year, value=person, inline=False)
 
                 await ctx.send(embed=embed)
 
