@@ -55,3 +55,13 @@ def build_event_embed(events, embed):
         embed.add_field(name=date, value=description, inline=False)
 
     return embed
+
+
+def build_birth_death_events_embed(events, embed):
+    for event in events:
+        year = event["year"]
+        person = event["text"]
+
+        embed.add_field(name=year, value=person, inline=False)
+
+    return embed

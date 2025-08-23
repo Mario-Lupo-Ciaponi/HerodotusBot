@@ -2,7 +2,7 @@ import discord
 from discord.ext import commands
 import random
 from utils.cache import JSONCache
-from utils.helper_functions import build_historical_figure_embed, build_event_embed
+from utils.helper_functions import build_historical_figure_embed, build_event_embed, build_birth_death_events_embed
 import aiohttp
 import os
 
@@ -12,6 +12,7 @@ from datetime import date, datetime
 WIKI_URL = "https://en.wikipedia.org/api/rest_v1/page/summary/"
 HISTORICAL_FIGURE_URL = "https://api.api-ninjas.com/v1/historicalfigures?name="
 EVENT_URL = "https://api.api-ninjas.com/v1/historicalevents?"
+EVENT_URL_MUFFIN_LABS = "https://history.muffinlabs.com/date/"
 QUOTE_URL = "https://philosophersapi.com/api/quotes"
 PHILOSOPHER_URL = "https://philosophersapi.com/api/philosophers/"
 
@@ -57,6 +58,30 @@ class Commands(commands.Cog):
         )
 
         embed.add_field(
+            name="!today",
+            value="Behold a notable event recorded in the annals of this very day.",
+            inline=False,
+        )
+
+        embed.add_field(
+            name="!era {year}",
+            value="Delve into a notable era chronicled in the annals of the year {year}.",
+            inline=False,
+        )
+
+        embed.add_field(
+            name="!birthdays {month(as a string)} {day}",
+            value="Behold the figures of history who entered this world on this day.",
+            inline=False,
+        )
+
+        embed.add_field(
+            name="!deaths {month(as a string)} {day(as a integer}",
+            value="Behold the figures of history who departed this mortal realm on this day.",
+            inline=False,
+        )
+
+        embed.add_field(
             name="!quote",
             value="Hear a fragment of wisdom plucked from history's pages.",
             inline=False,
@@ -76,7 +101,7 @@ class Commands(commands.Cog):
         description = "Greetings, traveler of time and curiosity! I am Herodotus Bot, chronicler of deeds long past and seeker of tales untold. From the rise and fall of empires to the whispers of forgotten civilizations, I gather stories, legends, and truths, preserving them for all who wish to learn. Ask, and I shall recount the annals of history; probe, and I shall reveal the marvels of our shared past. Through me, the ages speak once more."
 
         embed = discord.Embed(
-            title="Herodotus bot info", description=description, color=discord.Color.red()
+            title="Herodotus bot info", description=description, color=discord.Color.blue()
         )
 
         await ctx.send(embed=embed)
@@ -142,7 +167,7 @@ class Commands(commands.Cog):
         await ctx.send(embed=embed)
 
     @commands.command()
-    async def today_in_history(self, ctx):
+    async def today(self, ctx):
         today_date = date.today()
 
         year, month, day = today_date.year, today_date.month, today_date.day
@@ -208,12 +233,12 @@ class Commands(commands.Cog):
                            f"number known to the annals!")
             return
 
-        url = f"https://history.muffinlabs.com/date/{month}/{day}"
+        url = f"{EVENT_URL_MUFFIN_LABS}{month}/{day}"
 
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as response:
                 if response.status != 200:
-                    await ctx.send(f"Alas, {ctx.author.mention}, I could not find anyone that was born this date.")
+                    await ctx.send(f"Alas, {ctx.author.mention}, the annals reveal no soul born on this day.")
                     return
 
                 data = await response.json()
@@ -221,15 +246,43 @@ class Commands(commands.Cog):
                 birthdays = data["data"]["Births"][:25]
 
                 embed = discord.Embed(
-                    title=f"People born in {data["date"]}",
+                    title=f"On {data['date']}, the annals tell of these souls who came into the world.",
                     color=discord.Color.blue(),
                 )
 
-                for birthday in birthdays:
-                    year = birthday["year"]
-                    person = birthday["text"]
+                embed = build_birth_death_events_embed(birthdays, embed)
 
-                    embed.add_field(name=year, value=person, inline=False)
+                await ctx.send(embed=embed)
+
+    @commands.command()
+    async def deaths(self, ctx, month, day):
+        month = datetime.strptime(month, "%B").month
+
+        try:
+            month, day = int(month), int(day)
+        except ValueError:
+            await ctx.send(f"Alas, {ctx.author.mention}, the month or day you speak is not a "
+                           f"number known to the annals!")
+            return
+
+        url = f"{EVENT_URL_MUFFIN_LABS}{month}/{day}"
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    await ctx.send(f"Alas, {ctx.author.mention}, the chronicles record no soul who departed this day.")
+                    return
+
+                data = await response.json()
+
+                deaths = data["data"]["Deaths"][:25]
+
+                embed = discord.Embed(
+                    title=f"On {data['date']}, lives were lost, their deeds now remembered in the annals of history.",
+                    color=discord.Color.blue(),
+                )
+
+                embed = build_birth_death_events_embed(deaths, embed)
 
                 await ctx.send(embed=embed)
 
